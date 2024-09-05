@@ -1,14 +1,12 @@
 import config
 
-from http import client
-from unicodedata import name
 from yandex_music import Client
 
 client = Client(config.YAM_TOKEN).init()
 
 def search(query):
     r = client.search(query, type_="track")
-    if not  r.tracks:
+    if not r.tracks:
         return None
     
     result = []
@@ -31,6 +29,7 @@ def get_link(track_id):
 def get_track_data(track_id):
     track = client.tracks([track_id])[0]
     
+    duration = int(track.duration_ms / 1000) if track.duration_ms else 0
     title = track.title
     artists = []
     for artist in track.artists:
@@ -40,14 +39,13 @@ def get_track_data(track_id):
     link = track.get_download_info()[0].get_direct_link()
     
     cover = track.cover_uri.replace("%%", "400x400")
-
-    # track.download(f"temp/{track_id}.mp3")
     
     return {
         "title": title,
         "artists": artists,
         "link": link,
-        "cover_url": "https://" + cover
+        "cover_url": "https://" + cover,
+        "duration": duration
     }
 
 

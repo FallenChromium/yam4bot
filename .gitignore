@@ -4,3 +4,4 @@ bot.db
 *.zip
 config.py
 .DS_Store
+__pycache__

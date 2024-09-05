@@ -1,9 +1,8 @@
 from enum import unique
-from peewee import *
+from peewee import Model, IntegerField, CharField, SqliteDatabase
 
 db = SqliteDatabase('bot.db')
 db.connect()
-
 
 
 class CachedAudio(Model):
@@ -18,11 +17,8 @@ class CachedAudio(Model):
 db.create_tables([CachedAudio])
 
 
-def get(yam_id: str):
+def get(yam_id: str) -> CachedAudio | None:
     return CachedAudio.get_or_none(CachedAudio.yam_id == yam_id)
 
 def save(yam_id:str, tg_file_id: str):
     return CachedAudio(yam_id=yam_id, tg_file_id=tg_file_id).save()
-
-if __name__ == "__main__":
-    print('kek')
