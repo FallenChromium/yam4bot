@@ -21,10 +21,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.types import InputMediaAudio
 from aiogram.filters import Command
 
-from odesli.Odesli import Odesli
-
-odesli = Odesli()
-
 TOKEN = config.TG_TOKEN
 
 logging.basicConfig(level=logging.DEBUG)
@@ -134,7 +130,7 @@ async def chosen_track(chosen_inline_result: ChosenInlineResult):
         )
         await bot.edit_message_caption(
             inline_message_id=chosen_inline_result.inline_message_id,
-            caption=f"<a href='{data.link}'>Yandex Music</a>\n<a href='{odesli.getByUrl(data.link).songLink}'>song.link</a>",
+            caption=f"<a href='{data.link}'>Yandex Music</a>\n<a href='{f'odesli.co/{data.link}'}'>song.link</a>",
             parse_mode="HTML",
         )
     else:
