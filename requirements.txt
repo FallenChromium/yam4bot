@@ -9,7 +9,6 @@ certifi==2023.7.22
 charset-normalizer==2.0.12
 frozenlist==1.4.0
 idna==3.3
-multidict==6.0.2
 peewee==3.14.10
 PySocks==1.7.1
 pytz==2024.1
@@ -18,3 +17,4 @@ urllib3==1.26.9
 yandex-music==2.2.0
 yarl==1.9.11
 odesli==0.0.2
+python-dotenv==1.0.1

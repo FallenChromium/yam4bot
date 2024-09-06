@@ -1,7 +1,9 @@
 from enum import unique
 from peewee import Model, IntegerField, CharField, SqliteDatabase
+from config import DB_PATH
 
-db = SqliteDatabase('bot.db')
+db = SqliteDatabase(DB_PATH)
+print(f"Using DB: {DB_PATH}")
 db.connect()
 
 

@@ -1,0 +1,10 @@
+services:
+  yam4bot:
+    build:
+      context: .
+    env_file: ".env"
+    volumes:
+      - bot_db:/app/data/
+
+volumes:
+  bot_db:
