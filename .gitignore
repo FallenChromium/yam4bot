@@ -5,3 +5,4 @@ bot.db
 config.py
 .DS_Store
 __pycache__
+.venv

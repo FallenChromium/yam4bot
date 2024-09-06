@@ -14,10 +14,11 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.types import InputMediaAudio
 from aiogram.filters import Command
 
-TOKEN = config.TG_TOKEN
+from odesli.Odesli import Odesli
 
-if not os.path.exists("temp"):
-    os.mkdir("temp")
+odesli = Odesli()
+
+TOKEN = config.TG_TOKEN
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -59,42 +60,39 @@ async def chosen_track(chosen_inline_result: ChosenInlineResult):
     if result_id in result_ids:
         track_id = result_ids[result_id]
         track = db.get(track_id)
-        tg_file_id = track.tg_file_id if track else None
+        tg_file_id = str(track.tg_file_id) if track else None
         data = yamusic.get_track_data(track_id)
         logging.info(f"Got data: {data}")
         if not tg_file_id:
             # it could be that using URLInputFile will get throttled by Yandex Music, but it hasn't been the case
             # In the event this does happen, it's safer to use FSInputFile
-            # with open(f"temp/{track_id}.mp3", 'wb') as f:
-            #     r = requests.get(data['link']).content
-            #     f.write(r)
 
             # can't edit message and upload a file at the same time, pre-upload is required
             # aiogram doesn't support uploading without sending atm. A dummy chat has to be created and configured
             file = await bot.send_audio(
-                audio=URLInputFile(data['link']),
-                title=data['title'],
-                performer=str(data['artists']),
-                thumbnail=URLInputFile(data['cover_url']),
-                duration=data['duration'],
+                audio=URLInputFile(data.download_link),
+                title=data.title,
+                performer=str(data.artists),
+                thumbnail=URLInputFile(data.cover_url),
+                duration=data.duration,
                 chat_id=config.DUMP_CHAT_ID
             )
 
             tg_file_id = file.audio.file_id
             db.save(track_id, tg_file_id)
-            # os.remove(f"temp/{track_id}.mp3")
 
         await bot.edit_message_media(
                 media=InputMediaAudio(media=tg_file_id, 
-                title=data['title'],
-                performer=str(data['artists']), 
-                thumbnail=URLInputFile(data['cover_url']), 
-                duration=data['duration'],
+                title=data.title,
+                performer=str(data.artists), 
+                thumbnail=URLInputFile(data.cover_url), 
+                duration=data.duration,
                 ),
                 inline_message_id=chosen_inline_result.inline_message_id
             )
+        await bot.edit_message_caption(inline_message_id=chosen_inline_result.inline_message_id, caption=f"<a href='{data.link}'>Yandex Music</a>\n<a href='{odesli.getByUrl(data.link).songLink}'>song.link</a>", parse_mode='HTML')
     else:
-        logging.error("Unknown result id")
+        raise("Unknown result id")
 
 async def main() -> None:
     await dp.start_polling(bot)
