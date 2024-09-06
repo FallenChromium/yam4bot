@@ -34,6 +34,36 @@ dp = Dispatcher()
 result_ids = {}  # Hash array Result_ID => Track_Id
 
 
+def get_loading_markup(track_id: str | int):
+    return InlineKeyboardMarkup(
+        row_width=1,
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Загружаем...", callback_data=str(track_id))]
+        ],
+    )
+
+
+def ymtrack_as_inline_result(
+    track: yamusic.YandexTrack,
+    result_id: str | None = None,
+    markup: InlineKeyboardMarkup | None = None,
+) -> InlineQueryResultAudio:
+    result_id = (
+        result_id or hashlib.md5(str(track.yandex_track_id).encode()).hexdigest()
+    )
+    result_ids[result_id] = track.yandex_track_id
+    return InlineQueryResultAudio(
+        id=result_id,
+        # getting actual download link is slow and hurts the UX, so a placeholder is used
+        audio_url="https://cs12.spac.me/f/022155028048118178004245225041194015065048227225162088184137/1651935767/90406904/0/912c9cca2ba0f5da4d0df7cb4f7483ea/placeholder-spcs.me.mp3#asdasd",
+        title=track.title,
+        performer=track.artists,
+        audio_duration=track.duration,
+        # reply markup is required to have ability to edit the message later on
+        reply_markup=get_loading_markup(track.yandex_track_id),
+    )
+
+
 @dp.message(Command(commands="upload_placeholder"))
 async def upload_placeholder(message: Message):
     result = await message.reply_audio(FSInputFile("./tagmp3_crank-2.mp3"))
@@ -56,50 +86,11 @@ async def inline_search_audio(inline_query: InlineQuery):
             album_id, track_id = yandex_match.group(2), yandex_match.group(3)
             full_id = f"{track_id}:{album_id}"
             track = yamusic.get_track_data(full_id)
-            result_id = hashlib.md5(str(full_id).encode()).hexdigest()
-            result_ids[result_id] = full_id
-            items.append(
-                InlineQueryResultAudio(
-                    id=result_id,
-                    audio_url=track.download_link,
-                    title=track.title,
-                    performer=track.artists,
-                    reply_markup=InlineKeyboardMarkup(
-                        row_width=1,
-                        inline_keyboard=[
-                            [
-                                InlineKeyboardButton(
-                                    text="Загружаем...", callback_data=full_id
-                                )
-                            ]
-                        ],
-                    ),
-                )
-            )
+            items.append(ymtrack_as_inline_result(track))
     else:
         result = yamusic.search(query=query)
 
-        for track in result:
-            loading_markup = InlineKeyboardMarkup(
-                row_width=1,
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="Загружаем...", callback_data=track["id"]
-                        )
-                    ]
-                ],
-            )
-            result_id = hashlib.md5(str(track["id"]).encode()).hexdigest()
-            result_ids[result_id] = track["id"]
-            item = InlineQueryResultAudio(
-                id=result_id,
-                audio_url="https://cs12.spac.me/f/022155028048118178004245225041194015065048227225162088184137/1651935767/90406904/0/912c9cca2ba0f5da4d0df7cb4f7483ea/placeholder-spcs.me.mp3#asdasd",
-                title=f"{track['caption']}",
-                performer=f"{track['artist']}",
-                reply_markup=loading_markup,
-            )
-            items.append(item)
+        items = [ymtrack_as_inline_result(track) for track in result[:20]]
 
     await bot.answer_inline_query(inline_query.id, results=items, cache_time=5)
 
@@ -120,7 +111,7 @@ async def chosen_track(chosen_inline_result: ChosenInlineResult):
             # can't edit message and upload a file at the same time, pre-upload is required
             # aiogram doesn't support uploading without sending atm. A dummy chat has to be created and configured
             file = await bot.send_audio(
-                audio=URLInputFile(data.download_link),
+                audio=URLInputFile(data.get_download_link()),
                 title=data.title,
                 performer=str(data.artists),
                 thumbnail=URLInputFile(data.cover_url),
