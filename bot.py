@@ -35,7 +35,10 @@ async def upload_placeholder(message: Message):
 @dp.inline_query()
 async def inline_search_audio(inline_query: InlineQuery):
     items = []
-    query = inline_query.query or "Виктор Цой"  # default to "Виктор Цой" if no user input
+    query = inline_query.query
+    if not query:
+        await bot.answer_inline_query(inline_query.id, results=items, cache_time=5)
+        return
     result = yamusic.search(query=query)
     if result:
         for track in result:
