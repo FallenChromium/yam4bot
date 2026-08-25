@@ -1,6 +1,8 @@
 import logging
 import hashlib
+import os
 import re
+import shutil
 import sys
 import asyncio
 import db
@@ -18,7 +20,7 @@ from aiogram.types import (
     URLInputFile,
 )
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.types import InputMediaAudio
+from aiogram.types import InputMediaAudio, InputMediaDocument
 from aiogram.filters import Command
 
 TOKEN = config.TG_TOKEN
@@ -98,33 +100,50 @@ async def chosen_track(chosen_inline_result: ChosenInlineResult):
         track_id = result_ids[result_id]
         track = db.get(track_id)
         tg_file_id = str(track.tg_file_id) if track else None
+        # "doc:" prefix marks files pre-uploaded as documents (flac can't be sent as audio)
+        as_document = tg_file_id is not None and tg_file_id.startswith("doc:")
+        if as_document:
+            tg_file_id = tg_file_id.removeprefix("doc:")
         data = yamusic.get_track_data(track_id)
         logging.info(f"Got data: {data}")
         if not tg_file_id:
-            # it could be that using URLInputFile will get throttled by Yandex Music, but it hasn't been the case
-            # In the event this does happen, it's safer to use FSInputFile
-
-            # can't edit message and upload a file at the same time, pre-upload is required
-            # aiogram doesn't support uploading without sending atm. A dummy chat has to be created and configured
-            file = await bot.send_audio(
-                audio=URLInputFile(data.get_download_link()),
-                title=data.title,
-                performer=str(data.artists),
-                thumbnail=URLInputFile(data.cover_url),
-                duration=data.duration,
-                chat_id=config.DUMP_CHAT_ID,
-            )
-
-            tg_file_id = file.audio.file_id
-            db.save(track_id, tg_file_id)
+            # download & tag locally instead of passing the direct link to Telegram:
+            # the file gets a proper name and embedded metadata instead of a random m4a
+            path = await asyncio.to_thread(data.download)
+            try:
+                # can't edit message and upload a file at the same time, pre-upload is required
+                # aiogram doesn't support uploading without sending atm. A dummy chat has to be created and configured
+                if path.endswith(".flac"):
+                    # Bot API sendAudio only accepts mp3/m4a, so lossless goes as a document
+                    sent = await bot.send_document(
+                        document=FSInputFile(path), chat_id=config.DUMP_CHAT_ID
+                    )
+                    tg_file_id = "doc:" + sent.document.file_id
+                else:
+                    sent = await bot.send_audio(
+                        audio=FSInputFile(path),
+                        title=data.title,
+                        performer=str(data.artists),
+                        thumbnail=URLInputFile(data.cover_url),
+                        duration=data.duration,
+                        chat_id=config.DUMP_CHAT_ID,
+                    )
+                    tg_file_id = sent.audio.file_id
+                db.save(track_id, tg_file_id)
+            finally:
+                shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
         await bot.edit_message_media(
-            media=InputMediaAudio(
-                media=tg_file_id,
-                title=data.title,
-                performer=str(data.artists),
-                thumbnail=URLInputFile(data.cover_url),
-                duration=data.duration,
+            media=(
+                InputMediaDocument(media=tg_file_id)
+                if as_document
+                else InputMediaAudio(
+                    media=tg_file_id,
+                    title=data.title,
+                    performer=str(data.artists),
+                    thumbnail=URLInputFile(data.cover_url),
+                    duration=data.duration,
+                )
             ),
             inline_message_id=chosen_inline_result.inline_message_id,
         )

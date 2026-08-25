@@ -1,6 +1,11 @@
+import os
+import tempfile
 from dataclasses import dataclass
 import logging
 from typing import List
+import requests
+
+import audiofile
 import config
 
 from yandex_music import Client, Track as YMTrack
@@ -15,6 +20,8 @@ class Track:
     link: str
     cover_url: str | None
     duration: int
+    album: str | None = None
+    year: int | None = None
 
     def get_download_link():
         pass
@@ -34,6 +41,7 @@ class YandexTrack(Track):
 
     @classmethod
     def parse_from_ymtrack(cls, track: YMTrack):
+        album = track.albums[0] if track.albums else None
         return {
             "title": track.title,
             "artists": ", ".join([artist.name for artist in track.artists]),
@@ -44,6 +52,8 @@ class YandexTrack(Track):
                 else None
             ),
             "duration": int(track.duration_ms / 1000) if track.duration_ms else 0,
+            "album": album.title if album else None,
+            "year": album.year if album else None,
         }
 
     def get_download_link(self):
@@ -57,6 +67,38 @@ class YandexTrack(Track):
                 self.yandex_track_id,
             )
             return track.get_download_info()[0].get_direct_link()
+
+    def download(self) -> str:
+        audio = requests.get(self.get_download_link(), timeout=120).content
+        fmt = audiofile.detect_format(audio)
+        cover = None
+        if self.cover_url:
+            try:
+                cover = requests.get(self.cover_url, timeout=30).content
+            except requests.RequestException:
+                logging.warning(
+                    "Couldn't fetch cover for track %s", self.yandex_track_id
+                )
+        path = os.path.join(
+            tempfile.mkdtemp(prefix="yam4bot-"),
+            f"{audiofile.sanitize_filename(f'{self.artists} - {self.title}')}.{fmt}",
+        )
+        with open(path, "wb") as f:
+            f.write(audio)
+        try:
+            audiofile.tag(
+                path,
+                fmt,
+                title=self.title,
+                artists=self.artists,
+                album=self.album,
+                year=self.year,
+                cover=cover,
+            )
+        except Exception:
+            # untagged file is still better than a failed share
+            logging.exception("Couldn't tag %s", path)
+        return path
 
     # def get_available_quality(self) -> List[int]:
     #     track = client.tracks([self.yandex_track_id])[0]
